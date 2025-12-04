@@ -3,6 +3,7 @@ package usecase
 import (
 	"go-rest-api/model"
 	"go-rest-api/repository"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -53,7 +54,7 @@ func (uu *userUsecase) Login(user model.User) (string, error) {
 		// トークンの有効期限は12時間としておく。
 		"exp": time.Now().Add(time.Hour * 12).Unix(),
 	})
-	tokenString, err := token.SignedString([]byte("SECRET"))
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET")))
 	if err != nil {
 		return "", err
 	}

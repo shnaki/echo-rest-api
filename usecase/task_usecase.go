@@ -26,7 +26,7 @@ func (tu *taskUsecase) GetAllTasks(userId uint) ([]model.TaskResponse, error) {
 	if err := tu.tr.GetAllTasks(&tasks, userId); err != nil {
 		return nil, err
 	}
-	var resTasks []model.TaskResponse
+	resTasks := make([]model.TaskResponse, 0, len(tasks))
 	for _, t := range tasks {
 		tr := model.TaskResponse{
 			ID:        t.ID,

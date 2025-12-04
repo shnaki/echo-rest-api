@@ -66,7 +66,7 @@ func (tc *taskController) CreateTask(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
-	return c.JSON(http.StatusOK, taskRes)
+	return c.JSON(http.StatusCreated, taskRes)
 }
 
 func (tc *taskController) UpdateTask(c echo.Context) error {

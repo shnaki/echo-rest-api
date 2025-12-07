@@ -1,6 +1,10 @@
 package schema
 
-import "entgo.io/ent"
+import (
+	"entgo.io/ent"
+	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/mixin"
+)
 
 // Task holds the schema definition for the Task entity.
 type Task struct {
@@ -9,10 +13,19 @@ type Task struct {
 
 // Fields of the Task.
 func (Task) Fields() []ent.Field {
-	return nil
+	return []ent.Field{
+		field.String("title"),
+	}
 }
 
 // Edges of the Task.
 func (Task) Edges() []ent.Edge {
 	return nil
+}
+
+// Mixin は再利用可能なスキーマを注入する。
+func (Task) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		mixin.Time{},
+	}
 }

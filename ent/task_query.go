@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-rest-api/ent/predicate"
 	"go-rest-api/ent/task"
+	"go-rest-api/ent/user"
 	"math"
 
 	"entgo.io/ent"
@@ -22,6 +23,8 @@ type TaskQuery struct {
 	order      []task.OrderOption
 	inters     []Interceptor
 	predicates []predicate.Task
+	withOwner  *UserQuery
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (_q *TaskQuery) Unique(unique bool) *TaskQuery {
 func (_q *TaskQuery) Order(o ...task.OrderOption) *TaskQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryOwner chains the current query on the "owner" edge.
+func (_q *TaskQuery) QueryOwner() *UserQuery {
+	query := (&UserClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(task.Table, task.FieldID, selector),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, task.OwnerTable, task.OwnerColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Task entity from the query.
@@ -250,10 +275,22 @@ func (_q *TaskQuery) Clone() *TaskQuery {
 		order:      append([]task.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
 		predicates: append([]predicate.Task{}, _q.predicates...),
+		withOwner:  _q.withOwner.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithOwner tells the query-builder to eager-load the nodes that are connected to
+// the "owner" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TaskQuery) WithOwner(opts ...func(*UserQuery)) *TaskQuery {
+	query := (&UserClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOwner = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -262,12 +299,12 @@ func (_q *TaskQuery) Clone() *TaskQuery {
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		CreateTime time.Time `json:"create_time,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Task.Query().
-//		GroupBy(task.FieldTitle).
+//		GroupBy(task.FieldCreateTime).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *TaskQuery) GroupBy(field string, fields ...string) *TaskGroupBy {
@@ -285,11 +322,11 @@ func (_q *TaskQuery) GroupBy(field string, fields ...string) *TaskGroupBy {
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		CreateTime time.Time `json:"create_time,omitempty"`
 //	}
 //
 //	client.Task.Query().
-//		Select(task.FieldTitle).
+//		Select(task.FieldCreateTime).
 //		Scan(ctx, &v)
 func (_q *TaskQuery) Select(fields ...string) *TaskSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -332,15 +369,26 @@ func (_q *TaskQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *TaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Task, error) {
 	var (
-		nodes = []*Task{}
-		_spec = _q.querySpec()
+		nodes       = []*Task{}
+		withFKs     = _q.withFKs
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withOwner != nil,
+		}
 	)
+	if _q.withOwner != nil {
+		withFKs = true
+	}
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, task.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Task).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Task{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +400,46 @@ func (_q *TaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Task, e
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withOwner; query != nil {
+		if err := _q.loadOwner(ctx, query, nodes, nil,
+			func(n *Task, e *User) { n.Edges.Owner = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *TaskQuery) loadOwner(ctx context.Context, query *UserQuery, nodes []*Task, init func(*Task), assign func(*Task, *User)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*Task)
+	for i := range nodes {
+		if nodes[i].user_tasks == nil {
+			continue
+		}
+		fk := *nodes[i].user_tasks
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(user.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "user_tasks" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (_q *TaskQuery) sqlCount(ctx context.Context) (int, error) {

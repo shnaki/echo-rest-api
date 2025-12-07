@@ -5,6 +5,7 @@ package ent
 import (
 	"fmt"
 	"go-rest-api/ent/task"
+	"go-rest-api/ent/user"
 	"strings"
 	"time"
 
@@ -17,13 +18,37 @@ type Task struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// CreateTime holds the value of the "create_time" field.
+	CreateTime time.Time `json:"create_time,omitempty"`
+	// UpdateTime holds the value of the "update_time" field.
+	UpdateTime time.Time `json:"update_time,omitempty"`
 	// Title holds the value of the "title" field.
 	Title string `json:"title,omitempty"`
-	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the TaskQuery when eager-loading is set.
+	Edges        TaskEdges `json:"edges"`
+	user_tasks   *int
 	selectValues sql.SelectValues
+}
+
+// TaskEdges holds the relations/edges for other nodes in the graph.
+type TaskEdges struct {
+	// Owner holds the value of the owner edge.
+	Owner *User `json:"owner,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// OwnerOrErr returns the Owner value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TaskEdges) OwnerOrErr() (*User, error) {
+	if e.Owner != nil {
+		return e.Owner, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: user.Label}
+	}
+	return nil, &NotLoadedError{edge: "owner"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -35,8 +60,10 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case task.FieldTitle:
 			values[i] = new(sql.NullString)
-		case task.FieldCreatedAt, task.FieldUpdatedAt:
+		case task.FieldCreateTime, task.FieldUpdateTime:
 			values[i] = new(sql.NullTime)
+		case task.ForeignKeys[0]: // user_tasks
+			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -58,23 +85,30 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case task.FieldCreateTime:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field create_time", values[i])
+			} else if value.Valid {
+				_m.CreateTime = value.Time
+			}
+		case task.FieldUpdateTime:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field update_time", values[i])
+			} else if value.Valid {
+				_m.UpdateTime = value.Time
+			}
 		case task.FieldTitle:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field title", values[i])
 			} else if value.Valid {
 				_m.Title = value.String
 			}
-		case task.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
+		case task.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for edge-field user_tasks", value)
 			} else if value.Valid {
-				_m.CreatedAt = value.Time
-			}
-		case task.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				_m.UpdatedAt = value.Time
+				_m.user_tasks = new(int)
+				*_m.user_tasks = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -87,6 +121,11 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *Task) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryOwner queries the "owner" edge of the Task entity.
+func (_m *Task) QueryOwner() *UserQuery {
+	return NewTaskClient(_m.config).QueryOwner(_m)
 }
 
 // Update returns a builder for updating this Task.
@@ -112,14 +151,14 @@ func (_m *Task) String() string {
 	var builder strings.Builder
 	builder.WriteString("Task(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("create_time=")
+	builder.WriteString(_m.CreateTime.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("update_time=")
+	builder.WriteString(_m.UpdateTime.Format(time.ANSIC))
+	builder.WriteString(", ")
 	builder.WriteString("title=")
 	builder.WriteString(_m.Title)
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

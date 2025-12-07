@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go-rest-api/ent/predicate"
+	"go-rest-api/ent/task"
 	"go-rest-api/ent/user"
 	"time"
 
@@ -25,6 +26,12 @@ type UserUpdate struct {
 // Where appends a list predicates to the UserUpdate builder.
 func (_u *UserUpdate) Where(ps ...predicate.User) *UserUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetUpdateTime sets the "update_time" field.
+func (_u *UserUpdate) SetUpdateTime(v time.Time) *UserUpdate {
+	_u.mutation.SetUpdateTime(v)
 	return _u
 }
 
@@ -56,32 +63,19 @@ func (_u *UserUpdate) SetNillablePassword(v *string) *UserUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *UserUpdate) SetCreatedAt(v time.Time) *UserUpdate {
-	_u.mutation.SetCreatedAt(v)
+// AddTaskIDs adds the "tasks" edge to the Task entity by IDs.
+func (_u *UserUpdate) AddTaskIDs(ids ...int) *UserUpdate {
+	_u.mutation.AddTaskIDs(ids...)
 	return _u
 }
 
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableCreatedAt(v *time.Time) *UserUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
+// AddTasks adds the "tasks" edges to the Task entity.
+func (_u *UserUpdate) AddTasks(v ...*Task) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *UserUpdate) SetUpdatedAt(v time.Time) *UserUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableUpdatedAt(v *time.Time) *UserUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
-	return _u
+	return _u.AddTaskIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -89,8 +83,30 @@ func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
 }
 
+// ClearTasks clears all "tasks" edges to the Task entity.
+func (_u *UserUpdate) ClearTasks() *UserUpdate {
+	_u.mutation.ClearTasks()
+	return _u
+}
+
+// RemoveTaskIDs removes the "tasks" edge to Task entities by IDs.
+func (_u *UserUpdate) RemoveTaskIDs(ids ...int) *UserUpdate {
+	_u.mutation.RemoveTaskIDs(ids...)
+	return _u
+}
+
+// RemoveTasks removes "tasks" edges to Task entities.
+func (_u *UserUpdate) RemoveTasks(v ...*Task) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveTaskIDs(ids...)
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UserUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -116,6 +132,14 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_u *UserUpdate) defaults() {
+	if _, ok := _u.mutation.UpdateTime(); !ok {
+		v := user.UpdateDefaultUpdateTime()
+		_u.mutation.SetUpdateTime(v)
+	}
+}
+
 func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -125,17 +149,59 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.UpdateTime(); ok {
+		_spec.SetField(user.FieldUpdateTime, field.TypeTime, value)
+	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Password(); ok {
 		_spec.SetField(user.FieldPassword, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	if _u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
+	if nodes := _u.mutation.RemovedTasksIDs(); len(nodes) > 0 && !_u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -155,6 +221,12 @@ type UserUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *UserMutation
+}
+
+// SetUpdateTime sets the "update_time" field.
+func (_u *UserUpdateOne) SetUpdateTime(v time.Time) *UserUpdateOne {
+	_u.mutation.SetUpdateTime(v)
+	return _u
 }
 
 // SetEmail sets the "email" field.
@@ -185,37 +257,45 @@ func (_u *UserUpdateOne) SetNillablePassword(v *string) *UserUpdateOne {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *UserUpdateOne) SetCreatedAt(v time.Time) *UserUpdateOne {
-	_u.mutation.SetCreatedAt(v)
+// AddTaskIDs adds the "tasks" edge to the Task entity by IDs.
+func (_u *UserUpdateOne) AddTaskIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.AddTaskIDs(ids...)
 	return _u
 }
 
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableCreatedAt(v *time.Time) *UserUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
+// AddTasks adds the "tasks" edges to the Task entity.
+func (_u *UserUpdateOne) AddTasks(v ...*Task) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *UserUpdateOne) SetUpdatedAt(v time.Time) *UserUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableUpdatedAt(v *time.Time) *UserUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
-	return _u
+	return _u.AddTaskIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
+}
+
+// ClearTasks clears all "tasks" edges to the Task entity.
+func (_u *UserUpdateOne) ClearTasks() *UserUpdateOne {
+	_u.mutation.ClearTasks()
+	return _u
+}
+
+// RemoveTaskIDs removes the "tasks" edge to Task entities by IDs.
+func (_u *UserUpdateOne) RemoveTaskIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.RemoveTaskIDs(ids...)
+	return _u
+}
+
+// RemoveTasks removes "tasks" edges to Task entities.
+func (_u *UserUpdateOne) RemoveTasks(v ...*Task) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveTaskIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -233,6 +313,7 @@ func (_u *UserUpdateOne) Select(field string, fields ...string) *UserUpdateOne {
 
 // Save executes the query and returns the updated User entity.
 func (_u *UserUpdateOne) Save(ctx context.Context) (*User, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -255,6 +336,14 @@ func (_u *UserUpdateOne) Exec(ctx context.Context) error {
 func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *UserUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdateTime(); !ok {
+		v := user.UpdateDefaultUpdateTime()
+		_u.mutation.SetUpdateTime(v)
 	}
 }
 
@@ -284,17 +373,59 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.UpdateTime(); ok {
+		_spec.SetField(user.FieldUpdateTime, field.TypeTime, value)
+	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Password(); ok {
 		_spec.SetField(user.FieldPassword, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	if _u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
+	if nodes := _u.mutation.RemovedTasksIDs(); len(nodes) > 0 && !_u.mutation.TasksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &User{config: _u.config}
 	_spec.Assign = _node.assignValues

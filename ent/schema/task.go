@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/mixin"
 )
@@ -20,7 +21,11 @@ func (Task) Fields() []ent.Field {
 
 // Edges of the Task.
 func (Task) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.From("owner", User.Type).
+			Ref("tasks").
+			Unique(),
+	}
 }
 
 // Mixin は再利用可能なスキーマを注入する。

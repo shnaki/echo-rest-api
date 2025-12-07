@@ -4,8 +4,10 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"go-rest-api/ent/predicate"
+	"go-rest-api/ent/task"
 	"go-rest-api/ent/user"
 	"math"
 
@@ -22,6 +24,7 @@ type UserQuery struct {
 	order      []user.OrderOption
 	inters     []Interceptor
 	predicates []predicate.User
+	withTasks  *TaskQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (_q *UserQuery) Unique(unique bool) *UserQuery {
 func (_q *UserQuery) Order(o ...user.OrderOption) *UserQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryTasks chains the current query on the "tasks" edge.
+func (_q *UserQuery) QueryTasks() *TaskQuery {
+	query := (&TaskClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(task.Table, task.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.TasksTable, user.TasksColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first User entity from the query.
@@ -250,10 +275,22 @@ func (_q *UserQuery) Clone() *UserQuery {
 		order:      append([]user.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
 		predicates: append([]predicate.User{}, _q.predicates...),
+		withTasks:  _q.withTasks.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithTasks tells the query-builder to eager-load the nodes that are connected to
+// the "tasks" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithTasks(opts ...func(*TaskQuery)) *UserQuery {
+	query := (&TaskClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withTasks = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -262,12 +299,12 @@ func (_q *UserQuery) Clone() *UserQuery {
 // Example:
 //
 //	var v []struct {
-//		Email string `json:"email,omitempty"`
+//		CreateTime time.Time `json:"create_time,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.User.Query().
-//		GroupBy(user.FieldEmail).
+//		GroupBy(user.FieldCreateTime).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *UserQuery) GroupBy(field string, fields ...string) *UserGroupBy {
@@ -285,11 +322,11 @@ func (_q *UserQuery) GroupBy(field string, fields ...string) *UserGroupBy {
 // Example:
 //
 //	var v []struct {
-//		Email string `json:"email,omitempty"`
+//		CreateTime time.Time `json:"create_time,omitempty"`
 //	}
 //
 //	client.User.Query().
-//		Select(user.FieldEmail).
+//		Select(user.FieldCreateTime).
 //		Scan(ctx, &v)
 func (_q *UserQuery) Select(fields ...string) *UserSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -332,8 +369,11 @@ func (_q *UserQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, error) {
 	var (
-		nodes = []*User{}
-		_spec = _q.querySpec()
+		nodes       = []*User{}
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withTasks != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*User).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &User{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,46 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withTasks; query != nil {
+		if err := _q.loadTasks(ctx, query, nodes,
+			func(n *User) { n.Edges.Tasks = []*Task{} },
+			func(n *User, e *Task) { n.Edges.Tasks = append(n.Edges.Tasks, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *UserQuery) loadTasks(ctx context.Context, query *TaskQuery, nodes []*User, init func(*User), assign func(*User, *Task)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	query.withFKs = true
+	query.Where(predicate.Task(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.TasksColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.user_tasks
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "user_tasks" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_tasks" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (_q *UserQuery) sqlCount(ctx context.Context) (int, error) {

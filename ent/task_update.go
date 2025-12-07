@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go-rest-api/ent/predicate"
 	"go-rest-api/ent/task"
+	"go-rest-api/ent/user"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -28,6 +29,12 @@ func (_u *TaskUpdate) Where(ps ...predicate.Task) *TaskUpdate {
 	return _u
 }
 
+// SetUpdateTime sets the "update_time" field.
+func (_u *TaskUpdate) SetUpdateTime(v time.Time) *TaskUpdate {
+	_u.mutation.SetUpdateTime(v)
+	return _u
+}
+
 // SetTitle sets the "title" field.
 func (_u *TaskUpdate) SetTitle(v string) *TaskUpdate {
 	_u.mutation.SetTitle(v)
@@ -42,32 +49,23 @@ func (_u *TaskUpdate) SetNillableTitle(v *string) *TaskUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *TaskUpdate) SetCreatedAt(v time.Time) *TaskUpdate {
-	_u.mutation.SetCreatedAt(v)
+// SetOwnerID sets the "owner" edge to the User entity by ID.
+func (_u *TaskUpdate) SetOwnerID(id int) *TaskUpdate {
+	_u.mutation.SetOwnerID(id)
 	return _u
 }
 
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *TaskUpdate) SetNillableCreatedAt(v *time.Time) *TaskUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
+// SetNillableOwnerID sets the "owner" edge to the User entity by ID if the given value is not nil.
+func (_u *TaskUpdate) SetNillableOwnerID(id *int) *TaskUpdate {
+	if id != nil {
+		_u = _u.SetOwnerID(*id)
 	}
 	return _u
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *TaskUpdate) SetUpdatedAt(v time.Time) *TaskUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *TaskUpdate) SetNillableUpdatedAt(v *time.Time) *TaskUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
-	return _u
+// SetOwner sets the "owner" edge to the User entity.
+func (_u *TaskUpdate) SetOwner(v *User) *TaskUpdate {
+	return _u.SetOwnerID(v.ID)
 }
 
 // Mutation returns the TaskMutation object of the builder.
@@ -75,8 +73,15 @@ func (_u *TaskUpdate) Mutation() *TaskMutation {
 	return _u.mutation
 }
 
+// ClearOwner clears the "owner" edge to the User entity.
+func (_u *TaskUpdate) ClearOwner() *TaskUpdate {
+	_u.mutation.ClearOwner()
+	return _u
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *TaskUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -102,6 +107,14 @@ func (_u *TaskUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_u *TaskUpdate) defaults() {
+	if _, ok := _u.mutation.UpdateTime(); !ok {
+		v := task.UpdateDefaultUpdateTime()
+		_u.mutation.SetUpdateTime(v)
+	}
+}
+
 func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(task.Table, task.Columns, sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -111,14 +124,40 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.UpdateTime(); ok {
+		_spec.SetField(task.FieldUpdateTime, field.TypeTime, value)
+	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(task.FieldTitle, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(task.FieldCreatedAt, field.TypeTime, value)
+	if _u.mutation.OwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   task.OwnerTable,
+			Columns: []string{task.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(task.FieldUpdatedAt, field.TypeTime, value)
+	if nodes := _u.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   task.OwnerTable,
+			Columns: []string{task.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -140,6 +179,12 @@ type TaskUpdateOne struct {
 	mutation *TaskMutation
 }
 
+// SetUpdateTime sets the "update_time" field.
+func (_u *TaskUpdateOne) SetUpdateTime(v time.Time) *TaskUpdateOne {
+	_u.mutation.SetUpdateTime(v)
+	return _u
+}
+
 // SetTitle sets the "title" field.
 func (_u *TaskUpdateOne) SetTitle(v string) *TaskUpdateOne {
 	_u.mutation.SetTitle(v)
@@ -154,37 +199,34 @@ func (_u *TaskUpdateOne) SetNillableTitle(v *string) *TaskUpdateOne {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *TaskUpdateOne) SetCreatedAt(v time.Time) *TaskUpdateOne {
-	_u.mutation.SetCreatedAt(v)
+// SetOwnerID sets the "owner" edge to the User entity by ID.
+func (_u *TaskUpdateOne) SetOwnerID(id int) *TaskUpdateOne {
+	_u.mutation.SetOwnerID(id)
 	return _u
 }
 
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *TaskUpdateOne) SetNillableCreatedAt(v *time.Time) *TaskUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
+// SetNillableOwnerID sets the "owner" edge to the User entity by ID if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableOwnerID(id *int) *TaskUpdateOne {
+	if id != nil {
+		_u = _u.SetOwnerID(*id)
 	}
 	return _u
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *TaskUpdateOne) SetUpdatedAt(v time.Time) *TaskUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *TaskUpdateOne) SetNillableUpdatedAt(v *time.Time) *TaskUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
-	return _u
+// SetOwner sets the "owner" edge to the User entity.
+func (_u *TaskUpdateOne) SetOwner(v *User) *TaskUpdateOne {
+	return _u.SetOwnerID(v.ID)
 }
 
 // Mutation returns the TaskMutation object of the builder.
 func (_u *TaskUpdateOne) Mutation() *TaskMutation {
 	return _u.mutation
+}
+
+// ClearOwner clears the "owner" edge to the User entity.
+func (_u *TaskUpdateOne) ClearOwner() *TaskUpdateOne {
+	_u.mutation.ClearOwner()
+	return _u
 }
 
 // Where appends a list predicates to the TaskUpdate builder.
@@ -202,6 +244,7 @@ func (_u *TaskUpdateOne) Select(field string, fields ...string) *TaskUpdateOne {
 
 // Save executes the query and returns the updated Task entity.
 func (_u *TaskUpdateOne) Save(ctx context.Context) (*Task, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -224,6 +267,14 @@ func (_u *TaskUpdateOne) Exec(ctx context.Context) error {
 func (_u *TaskUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *TaskUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdateTime(); !ok {
+		v := task.UpdateDefaultUpdateTime()
+		_u.mutation.SetUpdateTime(v)
 	}
 }
 
@@ -253,14 +304,40 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.UpdateTime(); ok {
+		_spec.SetField(task.FieldUpdateTime, field.TypeTime, value)
+	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(task.FieldTitle, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(task.FieldCreatedAt, field.TypeTime, value)
+	if _u.mutation.OwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   task.OwnerTable,
+			Columns: []string{task.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(task.FieldUpdatedAt, field.TypeTime, value)
+	if nodes := _u.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   task.OwnerTable,
+			Columns: []string{task.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Task{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
@@ -54,19 +55,99 @@ func IDLTE(id int) predicate.Task {
 	return predicate.Task(sql.FieldLTE(FieldID, id))
 }
 
+// CreateTime applies equality check predicate on the "create_time" field. It's identical to CreateTimeEQ.
+func CreateTime(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldCreateTime, v))
+}
+
+// UpdateTime applies equality check predicate on the "update_time" field. It's identical to UpdateTimeEQ.
+func UpdateTime(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldUpdateTime, v))
+}
+
 // Title applies equality check predicate on the "title" field. It's identical to TitleEQ.
 func Title(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldTitle, v))
 }
 
-// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
-func CreatedAt(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldEQ(FieldCreatedAt, v))
+// CreateTimeEQ applies the EQ predicate on the "create_time" field.
+func CreateTimeEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldCreateTime, v))
 }
 
-// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
-func UpdatedAt(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldEQ(FieldUpdatedAt, v))
+// CreateTimeNEQ applies the NEQ predicate on the "create_time" field.
+func CreateTimeNEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldCreateTime, v))
+}
+
+// CreateTimeIn applies the In predicate on the "create_time" field.
+func CreateTimeIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldCreateTime, vs...))
+}
+
+// CreateTimeNotIn applies the NotIn predicate on the "create_time" field.
+func CreateTimeNotIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldCreateTime, vs...))
+}
+
+// CreateTimeGT applies the GT predicate on the "create_time" field.
+func CreateTimeGT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldCreateTime, v))
+}
+
+// CreateTimeGTE applies the GTE predicate on the "create_time" field.
+func CreateTimeGTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldCreateTime, v))
+}
+
+// CreateTimeLT applies the LT predicate on the "create_time" field.
+func CreateTimeLT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldCreateTime, v))
+}
+
+// CreateTimeLTE applies the LTE predicate on the "create_time" field.
+func CreateTimeLTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldCreateTime, v))
+}
+
+// UpdateTimeEQ applies the EQ predicate on the "update_time" field.
+func UpdateTimeEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldUpdateTime, v))
+}
+
+// UpdateTimeNEQ applies the NEQ predicate on the "update_time" field.
+func UpdateTimeNEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldUpdateTime, v))
+}
+
+// UpdateTimeIn applies the In predicate on the "update_time" field.
+func UpdateTimeIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldUpdateTime, vs...))
+}
+
+// UpdateTimeNotIn applies the NotIn predicate on the "update_time" field.
+func UpdateTimeNotIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldUpdateTime, vs...))
+}
+
+// UpdateTimeGT applies the GT predicate on the "update_time" field.
+func UpdateTimeGT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldUpdateTime, v))
+}
+
+// UpdateTimeGTE applies the GTE predicate on the "update_time" field.
+func UpdateTimeGTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldUpdateTime, v))
+}
+
+// UpdateTimeLT applies the LT predicate on the "update_time" field.
+func UpdateTimeLT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldUpdateTime, v))
+}
+
+// UpdateTimeLTE applies the LTE predicate on the "update_time" field.
+func UpdateTimeLTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldUpdateTime, v))
 }
 
 // TitleEQ applies the EQ predicate on the "title" field.
@@ -134,84 +215,27 @@ func TitleContainsFold(v string) predicate.Task {
 	return predicate.Task(sql.FieldContainsFold(FieldTitle, v))
 }
 
-// CreatedAtEQ applies the EQ predicate on the "created_at" field.
-func CreatedAtEQ(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldEQ(FieldCreatedAt, v))
+// HasOwner applies the HasEdge predicate on the "owner" edge.
+func HasOwner() predicate.Task {
+	return predicate.Task(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, OwnerTable, OwnerColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
 }
 
-// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
-func CreatedAtNEQ(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldNEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtIn applies the In predicate on the "created_at" field.
-func CreatedAtIn(vs ...time.Time) predicate.Task {
-	return predicate.Task(sql.FieldIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
-func CreatedAtNotIn(vs ...time.Time) predicate.Task {
-	return predicate.Task(sql.FieldNotIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtGT applies the GT predicate on the "created_at" field.
-func CreatedAtGT(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldGT(FieldCreatedAt, v))
-}
-
-// CreatedAtGTE applies the GTE predicate on the "created_at" field.
-func CreatedAtGTE(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldGTE(FieldCreatedAt, v))
-}
-
-// CreatedAtLT applies the LT predicate on the "created_at" field.
-func CreatedAtLT(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldLT(FieldCreatedAt, v))
-}
-
-// CreatedAtLTE applies the LTE predicate on the "created_at" field.
-func CreatedAtLTE(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
-func UpdatedAtEQ(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
-func UpdatedAtNEQ(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldNEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtIn applies the In predicate on the "updated_at" field.
-func UpdatedAtIn(vs ...time.Time) predicate.Task {
-	return predicate.Task(sql.FieldIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
-func UpdatedAtNotIn(vs ...time.Time) predicate.Task {
-	return predicate.Task(sql.FieldNotIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtGT applies the GT predicate on the "updated_at" field.
-func UpdatedAtGT(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldGT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
-func UpdatedAtGTE(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldGTE(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLT applies the LT predicate on the "updated_at" field.
-func UpdatedAtLT(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldLT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
-func UpdatedAtLTE(v time.Time) predicate.Task {
-	return predicate.Task(sql.FieldLTE(FieldUpdatedAt, v))
+// HasOwnerWith applies the HasEdge predicate on the "owner" edge with a given conditions (other predicates).
+func HasOwnerWith(preds ...predicate.User) predicate.Task {
+	return predicate.Task(func(s *sql.Selector) {
+		step := newOwnerStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-rest-api/ent/task"
 	"go-rest-api/ent/user"
 	"time"
 
@@ -20,6 +21,34 @@ type UserCreate struct {
 	hooks    []Hook
 }
 
+// SetCreateTime sets the "create_time" field.
+func (_c *UserCreate) SetCreateTime(v time.Time) *UserCreate {
+	_c.mutation.SetCreateTime(v)
+	return _c
+}
+
+// SetNillableCreateTime sets the "create_time" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCreateTime(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetCreateTime(*v)
+	}
+	return _c
+}
+
+// SetUpdateTime sets the "update_time" field.
+func (_c *UserCreate) SetUpdateTime(v time.Time) *UserCreate {
+	_c.mutation.SetUpdateTime(v)
+	return _c
+}
+
+// SetNillableUpdateTime sets the "update_time" field if the given value is not nil.
+func (_c *UserCreate) SetNillableUpdateTime(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetUpdateTime(*v)
+	}
+	return _c
+}
+
 // SetEmail sets the "email" field.
 func (_c *UserCreate) SetEmail(v string) *UserCreate {
 	_c.mutation.SetEmail(v)
@@ -32,16 +61,19 @@ func (_c *UserCreate) SetPassword(v string) *UserCreate {
 	return _c
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_c *UserCreate) SetCreatedAt(v time.Time) *UserCreate {
-	_c.mutation.SetCreatedAt(v)
+// AddTaskIDs adds the "tasks" edge to the Task entity by IDs.
+func (_c *UserCreate) AddTaskIDs(ids ...int) *UserCreate {
+	_c.mutation.AddTaskIDs(ids...)
 	return _c
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (_c *UserCreate) SetUpdatedAt(v time.Time) *UserCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
+// AddTasks adds the "tasks" edges to the Task entity.
+func (_c *UserCreate) AddTasks(v ...*Task) *UserCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddTaskIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -51,6 +83,7 @@ func (_c *UserCreate) Mutation() *UserMutation {
 
 // Save creates the User in the database.
 func (_c *UserCreate) Save(ctx context.Context) (*User, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -76,19 +109,31 @@ func (_c *UserCreate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_c *UserCreate) defaults() {
+	if _, ok := _c.mutation.CreateTime(); !ok {
+		v := user.DefaultCreateTime()
+		_c.mutation.SetCreateTime(v)
+	}
+	if _, ok := _c.mutation.UpdateTime(); !ok {
+		v := user.DefaultUpdateTime()
+		_c.mutation.SetUpdateTime(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (_c *UserCreate) check() error {
+	if _, ok := _c.mutation.CreateTime(); !ok {
+		return &ValidationError{Name: "create_time", err: errors.New(`ent: missing required field "User.create_time"`)}
+	}
+	if _, ok := _c.mutation.UpdateTime(); !ok {
+		return &ValidationError{Name: "update_time", err: errors.New(`ent: missing required field "User.update_time"`)}
+	}
 	if _, ok := _c.mutation.Email(); !ok {
 		return &ValidationError{Name: "email", err: errors.New(`ent: missing required field "User.email"`)}
 	}
 	if _, ok := _c.mutation.Password(); !ok {
 		return &ValidationError{Name: "password", err: errors.New(`ent: missing required field "User.password"`)}
-	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "User.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "User.updated_at"`)}
 	}
 	return nil
 }
@@ -116,6 +161,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_node = &User{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(user.Table, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
 	)
+	if value, ok := _c.mutation.CreateTime(); ok {
+		_spec.SetField(user.FieldCreateTime, field.TypeTime, value)
+		_node.CreateTime = value
+	}
+	if value, ok := _c.mutation.UpdateTime(); ok {
+		_spec.SetField(user.FieldUpdateTime, field.TypeTime, value)
+		_node.UpdateTime = value
+	}
 	if value, ok := _c.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 		_node.Email = value
@@ -124,13 +177,21 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldPassword, field.TypeString, value)
 		_node.Password = value
 	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
-		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
-		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
+	if nodes := _c.mutation.TasksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TasksTable,
+			Columns: []string{user.TasksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(task.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
@@ -153,6 +214,7 @@ func (_c *UserCreateBulk) Save(ctx context.Context) ([]*User, error) {
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*UserMutation)
 				if !ok {

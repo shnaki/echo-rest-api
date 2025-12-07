@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"go-rest-api/db"
-	"go-rest-api/model"
+	"log"
 )
 
 func main() {
-	dbConn := db.NewDB()
+	client := db.NewClient()
 	defer fmt.Println("Successfully migrated")
-	defer db.CloseDB(dbConn)
-	dbConn.AutoMigrate(&model.User{}, &model.Task{})
+	defer client.Close()
+
+	// 自動マイグレーションを実行する。
+	if err := client.Schema.Create(context.Background()); err != nil {
+		log.Fatalf("failed creating schema resources: %v", err)
+	}
 }
